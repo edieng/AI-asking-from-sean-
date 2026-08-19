@@ -6,6 +6,7 @@
     <title>AI Chat UI</title>
     <!-- Marked.js CDN for parsing Markdown -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
     <style>
         body { font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 2rem auto; padding: 1rem; }
         #chat { border: 1px solid #ccc; padding: 1rem; height: 400px; overflow-y: auto; margin-bottom: 1rem; border-radius: 8px; }
@@ -29,12 +30,45 @@
   <form id="form" style="display:flex;">
     <input id="msg" placeholder="Ask something..." required style="flex:1;" />
     <button type="submit">Send</button>
+    <button type="button" id="newChat">New Chat</button>
+    <button type="button" id="clear">Clear</button>
   </form>
 
   <script>
     const chat = document.getElementById('chat');
     const form = document.getElementById('form');
     const input = document.getElementById('msg');
+    const STORAGE_KEY = 'ai-chat-history';
+    const messages = [];
+
+    function saveMessages() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+    }
+
+    function appendStored(m) {
+      appendMessage(m.role === 'user' ? 'user' : 'ai', m.content, m.thinking || '');
+    }
+
+    function loadMessages() {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          parsed.forEach(m => {
+            messages.push(m);
+            appendStored(m);
+          });
+        }
+      }
+    }
+
+    function resetChat() {
+      messages.length = 0;
+      chat.innerHTML = '';
+      localStorage.removeItem(STORAGE_KEY);
+    }
+
+    loadMessages();
 
     function appendMessage(role, text, reasoning = '') {
       const div = document.createElement('div');
@@ -44,16 +78,17 @@
         if (reasoning) {
           const thinkDiv = document.createElement('details');
           thinkDiv.style.marginBottom = '0.5rem';
+          const cleanReasoning = DOMPurify.sanitize(marked.parse(reasoning));
           thinkDiv.innerHTML = `
             <summary style="cursor:pointer; color:#666; font-size:0.85em;">🧠 Thinking Process...</summary>
-            <div class="markdown-body" style="margin-top:0.5rem; padding:0.8rem; background:#ffffff; border-radius:6px; font-size:0.9em; color:#444;">${marked.parse(reasoning)}</div>
+            <div class="markdown-body" style="margin-top:0.5rem; padding:0.8rem; background:#ffffff; border-radius:6px; font-size:0.9em; color:#444;">${cleanReasoning}</div>
           `;
           div.appendChild(thinkDiv);
         }
         
         const ansDiv = document.createElement('div');
-        const formattedText = text && text.trim() ? marked.parse(text) : '<em>(No text generated)</em>';
-        ansDiv.innerHTML = `<strong>Answer:</strong><div class="markdown-body">${formattedText}</div>`;
+        const clean = text && text.trim() ? DOMPurify.sanitize(marked.parse(text)) : '<em>(No text generated)</em>';
+        ansDiv.innerHTML = `<div class="markdown-body">${clean}</div>`;
         div.appendChild(ansDiv);
       } else {
         div.textContent = text;
@@ -68,6 +103,7 @@
       const msg = input.value.trim();
       if (!msg) return;
 
+      messages.push({ role: 'user', content: msg });
       appendMessage('user', msg);
       input.value = '';
 
@@ -75,13 +111,15 @@
         const res = await fetch('/chat', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ messages: [{ role: 'user', content: msg }] })
+          body: JSON.stringify({ messages })
         });
 
         const data = await res.json();
 
         if (data.success) {
+          messages.push({ role: 'assistant', content: data.answer, thinking: data.thinking || '' });
           appendMessage('ai', data.answer, data.thinking || '');
+          saveMessages();
         } else {
           appendMessage('ai', `Error: ${data.error}`);
         }
@@ -90,6 +128,9 @@
         console.error(err);
       }
     });
+
+    document.getElementById('newChat').addEventListener('click', resetChat);
+    document.getElementById('clear').addEventListener('click', resetChat);
   </script>
 </body>
 </html>

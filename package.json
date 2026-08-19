@@ -15,8 +15,7 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "fs": "^0.0.1-security",
-    "openai": "^7.4.0",
-    "path": "^0.12.7"
+    "express-rate-limit": "^8.6.2",
+    "openai": "^7.4.0"
   }
 }

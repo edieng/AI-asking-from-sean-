@@ -38,7 +38,7 @@ const limiter = rateLimit({
   message: { success: false, error: 'Too many requests. Try again in a minute.' }
 });
 
-// Chat API Endpoint
+// Chat API Endpoint — streams tokens to the client with Server-Sent Events
 app.post('/chat', limiter, authCheck, async (req, res) => {
   try {
     if (!req.body.messages || !Array.isArray(req.body.messages)) {
@@ -50,38 +50,41 @@ app.post('/chat', limiter, authCheck, async (req, res) => {
       messages: req.body.messages,
       temperature: parseFloat(req.body.temperature) || 0.7,
       max_tokens: parseInt(req.body.max_tokens) || 2048,
+      stream: true
     };
 
-    console.log('[DEBUG] Sending payload:', JSON.stringify(payload, null, 2));
-    const response = await openai.chat.completions.create(payload);
-    console.log('[DEBUG] Raw LLM Response:', JSON.stringify(response, null, 2));
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
 
-    const choice = response.choices?.[0];
-    let rawContent = choice?.message?.content || choice?.text || '';
-    let rawReasoning = choice?.message?.reasoning_content || choice?.message?.reasoning || '';
-
-    // Extract thinking process if returned inside the configured think tag
+    const stream = await openai.chat.completions.create(payload);
     const THINK_TAG = process.env.THINK_TAG || '< think>';
-    if (typeof rawContent === 'string' && rawContent.includes(THINK_TAG)) {
-      const parts = rawContent.split('</' + THINK_TAG.slice(1) + '>');
-      if (parts.length > 1) {
-        rawReasoning = parts[0].replace(THINK_TAG, '').trim();
-        rawContent = parts[1].trim();
+    let thinking = '';
+    let inThinking = false;
+
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta || {};
+      const piece = delta.content || '';
+      if (piece === '') continue;
+      if (inThinking) {
+        thinking += piece;
+        continue;
       }
+      const markerIdx = piece.indexOf(THINK_TAG);
+      if (markerIdx !== -1) {
+        inThinking = true;
+        thinking += piece.slice(markerIdx + THINK_TAG.length);
+        continue;
+      }
+      res.write(`data: ${JSON.stringify({ token: piece })}\n\n`);
     }
 
-    const answer = rawContent.trim() || rawReasoning.trim() || 'No response generated.';
-    const thinking = rawContent.trim() ? rawReasoning.trim() : '';
-
-    res.json({
-      success: true,
-      answer: answer,
-      thinking: thinking
-    });
-
+    res.write(`data: ${JSON.stringify({ type: 'thinking', text: thinking })}\n\n`);
+    res.write('data: [DONE]\n\n');
+    res.end();
   } catch (err) {
     safeLog(err);
-    res.status(502).json({ 
+    res.status(502).json({
       success: false,
       error: err.message || 'Failed to reach AI service. Check API Key, API_URL, or network connection.'
     });

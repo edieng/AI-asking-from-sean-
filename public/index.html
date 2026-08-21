@@ -1,95 +1,37 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Chat UI</title>
-    <!-- Marked.js CDN for parsing Markdown -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <style>
-        body { font-family: system-ui, -apple-system, sans-serif; max-width: 600px; margin: 2rem auto; padding: 1rem; }
-        #chat { border: 1px solid #ccc; padding: 1rem; height: 400px; overflow-y: auto; margin-bottom: 1rem; border-radius: 8px; }
-        .msg { margin: 0.5rem 0; padding: 0.75rem; border-radius: 8px; }
-        .user { background: #eef6ff; text-align: right; }
-        .ai { background: #f0f0f0; text-align: left; line-height: 1.5; }
-        
-        /* Ensure line breaks and Markdown spacing render correctly */
-        .markdown-body { white-space: pre-wrap; word-break: break-word; }
-        .markdown-body p { margin: 0.4rem 0; }
-        .markdown-body ul, .markdown-body ol { padding-left: 1.2rem; margin: 0.4rem 0; }
-        .markdown-body h1, .markdown-body h2, .markdown-body h3 { margin: 0.6rem 0 0.3rem 0; font-size: 1.1em; }
-        
-        input, button { padding: 0.5rem; font-size: 1rem; }
-        button { margin-left: 0.5rem; cursor: pointer; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Chat UI</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+  <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-  <h2>🤖 AI Chat</h2>
+  <div class="header">
+    <h2>🤖 AI Chat</h2>
+    <button type="button" id="themeToggle">🌙 Dark</button>
+  </div>
+  <div id="emptyState" hidden>
+    <p>Ask your local model anything.</p>
+    <div id="chips">
+      <span class="chip">What is a black hole?</span>
+      <span class="chip">Explain how recursion works.</span>
+      <span class="chip">Give me a haiku about the sea.</span>
+    </div>
+  </div>
   <div id="chat"></div>
+  <p id="hint">Enter to send, Shift+Enter for newline.</p>
   <form id="form" style="display:flex;">
-    <input id="msg" placeholder="Ask something..." required style="flex:1;" />
+    <textarea id="msg" placeholder="Ask something..." rows="1" style="flex:1;" required></textarea>
     <button type="submit">Send</button>
+    <button type="button" id="stopBtn">Stop</button>
+    <button type="button" id="newChat">New Chat</button>
+    <button type="button" id="clear">Clear</button>
   </form>
-
-  <script>
-    const chat = document.getElementById('chat');
-    const form = document.getElementById('form');
-    const input = document.getElementById('msg');
-
-    function appendMessage(role, text, reasoning = '') {
-      const div = document.createElement('div');
-      div.className = `msg ${role === 'user' ? 'user' : 'ai'}`;
-      
-      if (role === 'ai') {
-        if (reasoning) {
-          const thinkDiv = document.createElement('details');
-          thinkDiv.style.marginBottom = '0.5rem';
-          thinkDiv.innerHTML = `
-            <summary style="cursor:pointer; color:#666; font-size:0.85em;">🧠 Thinking Process...</summary>
-            <div class="markdown-body" style="margin-top:0.5rem; padding:0.8rem; background:#ffffff; border-radius:6px; font-size:0.9em; color:#444;">${marked.parse(reasoning)}</div>
-          `;
-          div.appendChild(thinkDiv);
-        }
-        
-        const ansDiv = document.createElement('div');
-        const formattedText = text && text.trim() ? marked.parse(text) : '<em>(No text generated)</em>';
-        ansDiv.innerHTML = `<strong>Answer:</strong><div class="markdown-body">${formattedText}</div>`;
-        div.appendChild(ansDiv);
-      } else {
-        div.textContent = text;
-      }
-      
-      chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
-    }
-
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const msg = input.value.trim();
-      if (!msg) return;
-
-      appendMessage('user', msg);
-      input.value = '';
-
-      try {
-        const res = await fetch('/chat', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ messages: [{ role: 'user', content: msg }] })
-        });
-
-        const data = await res.json();
-
-        if (data.success) {
-          appendMessage('ai', data.answer, data.thinking || '');
-        } else {
-          appendMessage('ai', `Error: ${data.error}`);
-        }
-      } catch (err) {
-        appendMessage('ai', '❌ Error contacting server');
-        console.error(err);
-      }
-    });
-  </script>
+  <script src="js/api.js"></script>
+  <script src="js/chat.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>

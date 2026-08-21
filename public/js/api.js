@@ -28,7 +28,7 @@
   function streamChat(messages, onToken, onMeta) {
     return fetch('/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-secret': 'secret-1' },
       body: JSON.stringify({ messages: messages }),
       signal: signal()
     }).then(function (res) {
